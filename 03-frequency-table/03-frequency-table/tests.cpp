@@ -29,4 +29,8 @@
     in terms of others.
 
     ft1 <= ft2  iff  each frequency in ft1 is <= its corresponding frequency in ft2.
+
+    
+    !!! Added note: when implementing the operators, you can assume that the two FrequencyTables
+                    have the same size.
 */
