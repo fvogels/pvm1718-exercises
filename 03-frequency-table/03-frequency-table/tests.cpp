@@ -12,7 +12,7 @@
     A FrequencyTable must be initialized with a size N. It can then be used to keep counts
     of all unsigned integers from 0 to N-1.
     If no N is given, a default value of 10 is chosen.
-    Important: you are only allowed to define ONE constructor.
+    Important: you are only allowed to define ONE constructor to implement this functionality.
 
     Internally, a FrequencyTable must make use of an array of unsigned integers,
     which must be allocated on the heap (you don't have the choice since
@@ -31,6 +31,10 @@
     ft1 <= ft2  iff  each frequency in ft1 is <= its corresponding frequency in ft2.
 
     
-    !!! Added note: when implementing the operators, you can assume that the two FrequencyTables
-                    have the same size.
+    !!! Added notes !!!
+
+    * When implementing the operators, you can assume that the two FrequencyTables
+      have the same size.
+    * Initialization of a fresh FrequencyTable should be possible using one constructor (as mentioned above).
+      You will need a second constructor though, namely a copy constructor.
 */
