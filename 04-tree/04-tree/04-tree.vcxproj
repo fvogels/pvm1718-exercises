@@ -143,7 +143,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="util.h" />
-    <ClInclude Include="tree-set.h" />
     <ClInclude Include="Catch.h" />
   </ItemGroup>
   <ItemGroup>
