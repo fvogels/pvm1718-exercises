@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -137,12 +137,14 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -156,6 +158,10 @@
     <ClCompile Include="08-event-receiver-tests.cpp" />
     <ClCompile Include="09-note-tests.cpp" />
     <ClCompile Include="10-note-receiver-tests.cpp" />
+    <ClCompile Include="11-multicaster-tests.cpp" />
+    <ClCompile Include="12-read-notes-tests.cpp" />
+    <ClCompile Include="13-visualization.cpp" />
+    <ClCompile Include="14-main.cpp" />
     <ClCompile Include="app.cpp" />
     <ClCompile Include="bitmap.cpp" />
     <ClCompile Include="color.cpp" />
@@ -171,6 +177,7 @@
     <ClInclude Include="grid.h" />
     <ClInclude Include="position.h" />
     <ClInclude Include="settings.h" />
+    <ClInclude Include="tests-util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

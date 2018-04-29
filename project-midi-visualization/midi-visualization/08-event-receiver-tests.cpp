@@ -2,365 +2,156 @@
 
 #ifdef TEST_BUILD
 
-#include "midi.h"
-#include "Catch.h"
+#include "tests-util.h"
 #include <sstream>
-#include <list>
+
+using namespace testutils;
+
+/*
+
+    The time has arrived to deal with MTrk chunks. This is the most difficult part: read_mtrk, the function you need to
+    implement, is relatively large (probably 100+ lines). To alleviate your burden, the tests
+    have been written in a 'gradual' manner: you can focus on part A of the function, check if that works,
+    then part B, check it, etc. It might be a good idea to comment out the tests and
+    uncomment them step by step.
+
+    
+    An Mtrk chunk contains "events". The relevant events for use are "note on" and "note off",
+    which indicate that an instrument starts or stops playing a certain note, respectively.
+    It will be necessary, however, to be able to deal with all MIDI events, even those
+    that are of no interest to us.
+    
+    Each event carries some information with it. For example,
+    note on events are accompanied by two extra bytes: the note index and the "velocity".
+    What velocity means is not important right now, we'll deal with it later.
+    Some events have fixed sizes (e.g. always exactly 2 extra bytes),
+    some vary in size. It is therefore important that your code recognizes
+    all events, otherwise it will not know how many bytes to skip in order to reach
+    the next event in the chunk.
 
 
-namespace
-{
-    struct Event
-    {
-        uint32_t dt;
+    Each event in the MTrk chunk follows this pattern:
 
-        virtual ~Event() { }
-    };
+        [time-delta] [event-id] [extra-data]
 
-    struct MetaEvent : public Event
-    {
-        uint8_t type;
-        std::unique_ptr<char[]> data;
-        int data_size;
-    };
+    The time-delta (a variable length integer) expresses how long after the previous event the current event takes place.
+    In other words, it works with relative timestamps instead of absolute ones. The reason
+    is probably that relative timestamps generally remain small-valued so that one byte will suffice to encode them.
 
-    struct SysexEvent : public Event
-    {
-        std::unique_ptr<char[]> data;
-        int data_size;
-    };
+    After the time-delta you'll need to read the event-id, which will determine what kind of extra-data you can expect.
+    
+    The general algorithm will look something like
 
-    struct MidiEvent : public Event
-    {
-        uint8_t channel;
-    };
+        while not end of track reached
+            dt = read relative timestamp
+            b = read next byte
 
-    struct NoteOnEvent : public MidiEvent
-    {
-        uint8_t note;
-        uint8_t velocity;
-    };
+            if b == NOTE_ON
+              note = read byte
+              velocity = read byte
+              ...
+            else if b == NOTE_OFF
+              note = read byte
+              velocity = read byte
+              ...
+            else if b == ...
+    
 
-    struct NoteOffEvent : public MidiEvent
-    {
-        uint8_t note;
-        uint8_t velocity;
-    };
+    There are three more things to discuss: running status, end of track chunk and inversion of control.
 
-    struct PolyphonicEvent : public MidiEvent
-    {
-        uint8_t note;
-        uint8_t pressure;
-    };
 
-    struct ControlChangeEvent : public MidiEvent
-    {
-        uint8_t controller;
-        uint8_t value;
-    };
+    END OF TRACK CHUNK
+    ------------------
+    There are two ways to determine the end of the track:
+    * The track chunk start with a chunk header, which contains the number of bytes the chunk is made of.
+    * A special event indicates the end of the track.
 
-    struct ProgramChangeEvent : public MidiEvent
-    {
-        uint8_t program;
-    };
+    We will use the second way. Once you encounter the meta-event with type-code 0x2F (as explained
+    in the online sources), you know you reached the last event in the current MTrk chunk.
 
-    struct ChannelPressureEvent: public MidiEvent
-    {
-        uint8_t pressure;
-    };
 
-    struct PitchWheelChangeEvent : public MidiEvent
-    {
-        uint16_t value;
-    };
+    RUNNING STATUS
+    --------------
+    If multiple events of the same type (e.g. multiple note ons) follow each other,
+    the event-id can be omitted. For example,
 
-    class TestEventReceiver : public EventReceiver
-    {
-    private:
-        std::list<std::unique_ptr<Event>> expected_events;
+        [dt] [NOTE-ON] [note index] [velocity]
+        [dt] [NOTE-ON] [note index] [velocity]
+        [dt] [NOTE-ON] [note index] [velocity]
 
-    public:
-        TestEventReceiver(std::list<std::unique_ptr<Event>> expected_events) : expected_events(std::move(expected_events)) { }        
+    is generally encoded as
 
-        void note_on(uint32_t dt, uint8_t channel, uint8_t note, uint8_t velocity) override
+        [dt] [NOTE-ON] [note index] [velocity]
+        [dt] [note index] [velocity]
+        [dt] [note index] [velocity]
+
+    You will need to find to recognize
+    whether a byte following a [dt] is a event id or extra data for
+    an event of the same type as the previous one.
+
+
+    INVERSION OF CONTROL
+    --------------------
+    Inversion of control is a fancy name for how we will process events.
+    Say you write a function read_mtrk that manages to successfully read
+    all events. But what does it do with these events?
+
+    One approach would be define an event hierarchy: an Event superclass
+    and NoteOnEvent, NoteOffEvent, ... subclasses. Every time
+    an event is encountered, an object of the corresponding type is
+    created. All Event objects could then be collected in a list which is returned.
+    This approach is rather inefficient as it assumes you need all events. 
+    All event object also need to fit in memory at once.
+
+    A better approach is to pass along an object (which we'll call EventReceiver) with
+    a method for each kind of event. For example, the EventReceiver class must contain
+
+        void note_on(uint32_t dt, uint8_t channel, uint8_t note_index, uint8_t velocity);
+        void note_off(uint32_t dt, uint8_t channel, uint8_t note_index, uint8_t velocity);
+
+    So, the read_mtrk function receives such an EventReceiver object and each
+    time it encounters a 'note on' event, it reads all data related to it
+    and calls note_on() on the EventReceiver object.
+    
+    Say we are simply interested in the number of notes in a track,
+    we would simply implement the following EventReceiver:
+
+        class CountingReceiver : public EventReceiver
         {
-            REQUIRE(expected_events.size() != 0);
+        public:
+            int note_count;
 
-            std::unique_ptr<Event> expected = std::move(expected_events.front());
-            expected_events.pop_front();
-            auto actual = dynamic_cast<NoteOnEvent*>(expected.get());
+            CounterReceiver() : note_count(0) { }
 
-            REQUIRE(actual != nullptr);
-            CHECK(actual->dt == dt);
-            CHECK(actual->channel == channel);
-            CHECK(actual->note == note);
-            CHECK(actual->velocity == velocity);
-        }
+            void note_on(uint32_t dt, uint8_t channel, uint8_t note_index, uint8_t velocity) { note_count++; }
+            void note_off(uint32_t dt, uint8_t channel, uint8_t note_index, uint8_t velocity) { }
+            // all other events methods similarly with empty body
+        };
 
-        void note_off(uint32_t dt, uint8_t channel, uint8_t note, uint8_t velocity) override
-        {
-            REQUIRE(expected_events.size() != 0);
+        CountingReceiver r;
+        read_mtrk(stream, r);
+        std::cout << "Track contains " << r.note_count << " notes" << std::endl;
 
-            std::unique_ptr<Event> expected = std::move(expected_events.front());
-            expected_events.pop_front();
-            auto actual = dynamic_cast<NoteOffEvent*>(expected.get());
+    
+    IMPLEMENTATION STEPS
+    --------------------
+    1. First, you need to define EventReceiver. This class acts as a superclass
+       for event receivers. It only needs to contain one virtual method per
+       MIDI event, for a total of 9 methods.
 
-            REQUIRE(actual != nullptr);
-            CHECK(actual->dt == dt);
-            CHECK(actual->channel == channel);
-            CHECK(actual->note == note);
-            CHECK(actual->velocity == velocity);
-        }
+    2. Define the function
 
-        void polyphonic_key_pressure(uint32_t dt, uint8_t channel, uint8_t note, uint8_t pressure) override
-        {
-            REQUIRE(expected_events.size() != 0);
+            bool read_mtrk(std::istream& in, EventReceiver&)
 
-            std::unique_ptr<Event> expected = std::move(expected_events.front());
-            expected_events.pop_front();
-            auto actual = dynamic_cast<PolyphonicEvent*>(expected.get());
+       Start with a minimal body:
+       * It starts with reading the CHUNK_HEADER and checking it is indeed an MTrk (return false immediately if that's not the case).
+       * Next, add support for meta events (as described in the online sources), i.e. events identified by 0xFF.
+         Add code that recognizes the end of a track (meta event with type == 0x2F).
+       * Check that the first few tests work.
 
-            REQUIRE(actual != nullptr);
-            CHECK(actual->dt == dt);
-            CHECK(actual->channel == channel);
-            CHECK(actual->note == note);
-            CHECK(actual->pressure == pressure);
-        }
+    3. Gradually add support for more events. Take a look at the tests for the order in which to proceed.
 
-        void control_change(uint32_t dt, uint8_t channel, uint8_t controller, uint8_t value) override
-        {
-            REQUIRE(expected_events.size() != 0);
-
-            std::unique_ptr<Event> expected = std::move(expected_events.front());
-            expected_events.pop_front();
-            auto actual = dynamic_cast<ControlChangeEvent*>(expected.get());
-
-            REQUIRE(actual != nullptr);
-            CHECK(actual->dt == dt);
-            CHECK(actual->channel == channel);
-            CHECK(actual->controller == controller);
-            CHECK(actual->value == value);
-        }
-
-        void program_change(uint32_t dt, uint8_t channel, uint8_t program) override
-        {
-            REQUIRE(expected_events.size() != 0);
-
-            std::unique_ptr<Event> expected = std::move(expected_events.front());
-            expected_events.pop_front();
-            auto actual = dynamic_cast<ProgramChangeEvent*>(expected.get());
-
-            REQUIRE(actual != nullptr);
-            CHECK(actual->dt == dt);
-            CHECK(actual->channel == channel);
-            CHECK(actual->program == program);
-        }
-
-        void channel_pressure(uint32_t dt, uint8_t channel, uint8_t pressure) override
-        {
-            REQUIRE(expected_events.size() != 0);
-
-            std::unique_ptr<Event> expected = std::move(expected_events.front());
-            expected_events.pop_front();
-            auto actual = dynamic_cast<ChannelPressureEvent*>(expected.get());
-
-            REQUIRE(actual != nullptr);
-            CHECK(actual->dt == dt);
-            CHECK(actual->channel == channel);
-            CHECK(actual->pressure == pressure);
-        }
-
-        void pitch_wheel_change(uint32_t dt, uint8_t channel, uint16_t value) override
-        {
-            REQUIRE(expected_events.size() != 0);
-
-            std::unique_ptr<Event> expected = std::move(expected_events.front());
-            expected_events.pop_front();
-            auto actual = dynamic_cast<PitchWheelChangeEvent*>(expected.get());
-
-            REQUIRE(actual != nullptr);
-            CHECK(actual->dt == dt);
-            CHECK(actual->value == value);
-        }
-
-        void meta(uint32_t dt, uint8_t type, std::unique_ptr<char[]> data, int data_size) override
-        {
-            {
-                INFO("This failure means that your function finds nonexistent events");
-
-                REQUIRE(expected_events.size() != 0);
-            }
-
-            std::unique_ptr<Event> expected = std::move(expected_events.front());
-            expected_events.pop_front();
-            auto actual = dynamic_cast<MetaEvent*>(expected.get());
-
-            REQUIRE(actual != nullptr);
-            CHECK(actual->dt == dt);
-            CHECK(actual->type == type);
-            REQUIRE(actual->data_size == data_size);
-
-            for (int i = 0; i != data_size; ++i)
-            {
-                CHECK(actual->data[i] == data[i]);
-            }
-        }
-
-        void sysex(uint32_t dt, std::unique_ptr<char[]> data, int data_size) override
-        {
-            REQUIRE(expected_events.size() != 0);
-
-            std::unique_ptr<Event> expected = std::move(expected_events.front());
-            expected_events.pop_front();
-            auto actual = dynamic_cast<SysexEvent*>(expected.get());
-
-            REQUIRE(actual != nullptr);
-            CHECK(actual->dt == dt);
-            REQUIRE(actual->data_size == data_size);
-
-            for (int i = 0; i != data_size; ++i)
-            {
-                CHECK(actual->data[i] == data[i]);
-            }
-        }
-
-        void check_finished()
-        {
-            SECTION("Checking that all events have been handled")
-            {
-                INFO("This failure means that your code did not find all events in the track");
-
-                CHECK(expected_events.size() == 0);
-            }
-        }
-    };
-
-    class Builder
-    {
-    private:
-        std::list<std::unique_ptr<Event>> expected_events;
-
-    public:
-        Builder& note_on(uint32_t dt, uint8_t channel, uint8_t note, uint8_t velocity)
-        {
-            auto event = std::make_unique<NoteOnEvent>();
-            event->dt = dt;
-            event->channel = channel;
-            event->note = note;
-            event->velocity = velocity;
-
-            expected_events.push_back(std::move(event));
-
-            return *this;
-        }
-
-        Builder& note_off(uint32_t dt, uint8_t channel, uint8_t note, uint8_t velocity)
-        {
-            auto event = std::make_unique<NoteOffEvent>();
-            event->dt = dt;
-            event->channel = channel;
-            event->note = note;
-            event->velocity = velocity;
-
-            expected_events.push_back(std::move(event));
-
-            return *this;
-        }
-
-        Builder& polyphonic_key_pressure(uint32_t dt, uint8_t channel, uint8_t note, uint8_t pressure)
-        {
-            auto event = std::make_unique<PolyphonicEvent>();
-            event->dt = dt;
-            event->channel = channel;
-            event->note = note;
-            event->pressure = pressure;
-
-            expected_events.push_back(std::move(event));
-
-            return *this;
-        }
-
-        Builder& control_change(uint32_t dt, uint8_t channel, uint8_t controller, uint8_t value)
-        {
-            auto event = std::make_unique<ControlChangeEvent>();
-            event->dt = dt;
-            event->channel = channel;
-            event->controller = controller;
-            event->value = value;
-
-            expected_events.push_back(std::move(event));
-
-            return *this;
-        }
-
-        Builder& program_change(uint32_t dt, uint8_t channel, uint8_t program)
-        {
-            auto event = std::make_unique<ProgramChangeEvent>();
-            event->dt = dt;
-            event->channel = channel;
-            event->program = program;
-
-            expected_events.push_back(std::move(event));
-
-            return *this;
-        }
-
-        Builder& channel_pressure(uint32_t dt, uint8_t channel, uint8_t pressure)
-        {
-            auto event = std::make_unique<ChannelPressureEvent>();
-            event->dt = dt;
-            event->channel = channel;
-            event->pressure = pressure;
-
-            expected_events.push_back(std::move(event));
-
-            return *this;
-        }
-
-        Builder& pitch_wheel_change(uint32_t dt, uint8_t channel, uint16_t value)
-        {
-            auto event = std::make_unique<PitchWheelChangeEvent>();
-            event->dt = dt;
-            event->channel = channel;
-            event->value = value;
-
-            expected_events.push_back(std::move(event));
-
-            return *this;
-        }
-
-        Builder& meta(uint32_t dt, uint8_t type, std::unique_ptr<char[]> data, int data_size)
-        {
-            auto event = std::make_unique<MetaEvent>();
-            event->dt = dt;
-            event->type = type;
-            event->data = std::move(data);
-            event->data_size = data_size;
-
-            expected_events.push_back(std::move(event));
-            
-            return *this;
-        }
-
-        Builder& sysex(uint32_t dt, std::unique_ptr<char[]> data, int data_size)
-        {
-            auto event = std::make_unique<SysexEvent>();
-            event->dt = dt;
-            event->data = std::move(data);
-            event->data_size = data_size;
-
-            expected_events.push_back(std::move(event));
-
-            return *this;
-        }
-        
-        std::unique_ptr<TestEventReceiver> build()
-        {
-            return std::make_unique<TestEventReceiver>(std::move(expected_events));
-        }
-    };
-}
-
+*/
 
 
 TEST_CASE("Reading empty MTrk")
@@ -469,8 +260,9 @@ TEST_CASE("Reading MTrk with single meta event with data = { 0 }")
     std::string data(buffer, sizeof(buffer));
     std::stringstream ss(data);
 
+    char metadata[] { 0 };
     auto receiver = Builder()
-        .meta(0, 0x05, std::unique_ptr<char[]>(new char[1] {0}), 1)
+        .meta(0, 0x05, metadata, sizeof(metadata))
         .meta(0, 0x2F, nullptr, 0)
         .build();
 
@@ -489,8 +281,9 @@ TEST_CASE("Reading MTrk with single meta event with data = { 0x12, 0x34 }")
     std::string data(buffer, sizeof(buffer));
     std::stringstream ss(data);
 
+    char metadata[]{ 0x12, 0x34 };
     auto receiver = Builder()
-        .meta(0, 0x05, std::unique_ptr<char[]>(new char[2]{ 0x12, 0x34 }), 2)
+        .meta(0, 0x05, metadata, sizeof(metadata))
         .meta(0, 0x2F, nullptr, 0)
         .build();
 
@@ -573,8 +366,9 @@ TEST_CASE("Reading MTrk with sysex event with data = {1, 2, 3}")
     std::string data(buffer, sizeof(buffer));
     std::stringstream ss(data);
 
+    char sysex_data[]{ 1,2,3 };
     auto receiver = Builder()
-        .sysex(0, std::unique_ptr<char[]>(new char[3]{ 1, 2, 3 }), 3)
+        .sysex(0, sysex_data, sizeof(sysex_data))
         .meta(0, 0x2F, nullptr, 0)
         .build();
 

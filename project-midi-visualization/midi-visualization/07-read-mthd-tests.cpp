@@ -9,6 +9,20 @@
 #include <cstddef>
 
 
+/*
+    There are two kinds of chunks: MThd and MTrk. While MTrk chunks can have varying sizes, MThd chunks always
+    have the same size. This means we can use the same approach as when reading CHUNK_HEADER: we define
+    a POD containing all the pieces of data contained within an MThd and read it in one go.
+
+    Look up what a MThd chunk looks like and define a corresponding POD-type named MThd.
+    Next, write
+
+        bool read_mthd(std::istream&, MThd*)
+
+    that reads the data from the given istream and writes it to memory pointed to by the given pointer.
+*/
+
+
 TEST_CASE("Checking that MThd is defined correctly")
 {
     static_assert(std::is_same<decltype(MThd::header), CHUNK_HEADER>::value, "MThd is lacking member 'header' of the appropriate type");

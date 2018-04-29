@@ -9,6 +9,16 @@
 #include <cstddef>
 
 
+/*
+    CHUNK_HEADER contains information about what kind of chunk it is (MThd or MTrk).
+    Write a function 
+
+        std::string header_id(const MTHD&)
+    
+    that retrieves this information and returns it as string.
+*/
+
+
 TEST_CASE("Reading id from header with id MThd")
 {
     CHUNK_HEADER header{ { 'M', 'T', 'h', 'd'}, 0 };
