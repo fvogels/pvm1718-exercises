@@ -8,6 +8,23 @@
 #include <sstream>
 
 
+/*
+
+    Write a function
+
+        bool read_notes(std::istream&, std::vector<NOTE>&)
+
+    that reads all notes from the given input stream. You should
+    assume that the input stream represents a complete MIDI file,
+    i.e., you need to read the MThd and all MTrk chunks,
+    collect all note-related data and store it in the
+    given vector.
+
+    Combine a series of NoteFilters (one per channel) into a single EventMulticaster
+    which you pass along to read_mtrk. Repeat this for each MTrk.
+
+*/
+
 
 TEST_CASE("read_notes, zero tracks")
 {
