@@ -29,6 +29,8 @@ TEST_CASE("Checking that MThd is defined correctly")
     static_assert(std::is_same<decltype(MThd::type), uint16_t>::value, "MThd is lacking member 'type' of the appropriate type");
     static_assert(std::is_same<decltype(MThd::ntracks), uint16_t>::value, "MThd is lacking member 'ntracks' of the appropriate type");
     static_assert(std::is_same<decltype(MThd::division), uint16_t>::value, "MThd is lacking member 'division' of the appropriate type");
+
+	// If this line does not compile, look online for "pragma pack push pop"
     static_assert(sizeof(MThd) == sizeof(CHUNK_HEADER) + 3 * sizeof(uint16_t), "MThd does not have the right size");
 
     static_assert(offsetof(MThd, header) == 0, "MThd's header field does not have the correct offset");
