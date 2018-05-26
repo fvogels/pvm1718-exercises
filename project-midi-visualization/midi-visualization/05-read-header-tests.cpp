@@ -70,7 +70,7 @@
 
     Next,
 
-        bool write read_header(std::istream&, CHUNK_HEADER*)
+        bool read_header(std::istream&, CHUNK_HEADER*)
 
     which reads the appropriate number of bytes from the given istream
     and stores them to wherever the given pointer points.
