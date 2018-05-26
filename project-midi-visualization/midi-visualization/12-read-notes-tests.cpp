@@ -12,7 +12,7 @@
 
     Write a function
 
-        bool read_notes(std::istream&, std::vector<NOTE>&)
+        bool read_notes(std::istream&, std::vector<NOTE>*)
 
     that reads all notes from the given input stream. You should
     assume that the input stream represents a complete MIDI file,
