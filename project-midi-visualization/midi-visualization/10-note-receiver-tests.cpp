@@ -36,8 +36,10 @@
         read_mtrk(in, filter);
         // notes contains all notes on channel 0
 
-    Order the notes by the position of their note off event in the track
-    (this should be the easiest order to achieve.)
+    The tests assume the notes are ordered by the position of their note off event in the track;
+    this should be the easiest order to achieve. However, the order is not important for the visualization,
+    so feel free to modify the tests and make them expect the notes in an order of your liking.
+    
 */
 
 
