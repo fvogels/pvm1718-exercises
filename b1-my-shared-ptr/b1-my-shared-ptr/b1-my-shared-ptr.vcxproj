@@ -147,7 +147,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Catch.h" />
-    <ClInclude Include="my_shared_ptr.h" />
     <ClInclude Include="util.h" />
   </ItemGroup>
   <ItemGroup>

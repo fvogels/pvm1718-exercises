@@ -18,9 +18,6 @@
     <ClInclude Include="Catch.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="my_shared_ptr.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="util.h">
       <Filter>Header Files</Filter>
     </ClInclude>
